@@ -1,0 +1,92 @@
+#!/usr/bin/env groovy
+
+//@Library("global-jenkins-library@master") _
+//@Library("jenkins-library@main") _
+@Library("jenkins-library@main") _
+
+pipeline {
+  agent any
+  options {
+    buildDiscarder logRotator(daysToKeepStr: '', numToKeepStr: '20')
+  }
+
+  environment { 
+    VERSION = getVersion()
+    REPO_NAME = getRepoName()
+  }
+
+  triggers {
+    cron('30 02 * * *')
+  }
+
+  stages{
+    stage("SCM Checkout"){ 
+        steps {
+          script {
+            sh "mkdir -p .changes"
+                    //    if ( env.TAG_NAME != null) {
+            sh(script: 'for i in $(git diff-tree --no-commit-id --name-only -r $(git rev-parse HEAD | cut -c-7) |  \
+                grep "/" | cut -d "/" -f1 | uniq); do touch .changes/$i; done || true', returnStdout: true)
+                    //    }
+            print "SCM Checkout: GIT_TAG is ${env.TAG_NAME}, GIT BRANCH is ${BRANCH_NAME}"
+               
+          }
+        }
+    }
+    
+    stage("Security Analysis"){
+      steps {
+        script {
+          def orgList = [ 'FONE' ]
+          for (org in orgList) {
+            scheduledXrayScan(org)
+          // script {
+          //   withCredentials([usernamePassword(credentialsId: 'github_token', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
+          //     sh "git clone -b ${JOBNAME} https://${GIT_PASSWORD}@github.cicd.cloud.fpdev.io/FOne/chart-tag.git"
+          //   }
+            // parallel{
+            //   stage("Security Vulnerability scan"){          
+            //     //when { expression { return fileExists ('.changes/present') }}
+            //       environment {
+            //            ORGANIZATION_NAME = "RBI" }
+            //       steps {
+            //           globalSecurityVulnerabilityScanner(organization:"${ORGANIZATION_NAME}", repository:"${REPO_NAME}", reportFormat:"yaml", reportFileName:"${REPO_NAME}-report")
+            //     }
+            //   }
+            //   stage("SonarQube"){
+            //     stages{
+            //       stage("Static Analysis"){
+            //          // when { expression { return fileExists ('.changes/present') }}
+            //           environment {
+            //               scanner_home = tool 'SonarQube Scanner'
+            //               SONAR_KEY = credentials('sonarqube-jenkins')
+            //           }
+            //           steps{
+            //               withSonarQubeEnv('sonarqube-ent'){
+            //                   sh '${scanner_home}/bin/sonar-scanner -Dsonar.host.url=https://sonarqube-ent.cicd.cloud.fpdev.io -Dsonar.login=$SONAR_KEY  -Dsonar.c.file.suffixes=- -Dsonar.cpp.file.suffixes=- -Dsonar.objc.file.suffixes=-'
+            //               }       
+            //           }
+            //       }
+            //       stage("Quality Gate"){
+            //         // when { expression { return fileExists ('.changes/present') }}
+            //         steps{
+            //           timeout(time: 30, unit: 'MINUTES'){
+            //           waitForQualityGate abortPipeline: false
+            //           }      
+            //         }
+            //       }
+            //     }
+            //   }
+          }
+        }
+      }
+    }
+  }
+
+  post {
+      cleanup {
+          cleanWs()
+      }
+  }
+
+}
